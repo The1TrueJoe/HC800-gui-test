@@ -150,6 +150,46 @@ The web GUI lives at `http://HC800_IP/c4kiosk/` and is served by the HC800's bui
 
 ---
 
+## React / modern web apps
+
+NetSurf-FB is useful for simple static pages and basic ES5 scripts, but it is **not a practical native React runtime** on the stock HC800. External JavaScript can execute once `enable_javascript:1` is set in `~/.netsurf/Choices`, but the browser's DOM implementation is incomplete: APIs/properties React depends on are missing or stubbed, and modern HTTPS is limited.
+
+For React dashboards, use the HC800 as a thin HDMI framebuffer endpoint:
+
+1. Serve the React app from any HTTP/HTTPS URL.
+2. Run `scripts/render-browser-to-hc800.py` on a Mac/Linux host with Playwright Chromium.
+3. The renderer captures 1280×720 screenshots, converts them to HC800 BGRX, and posts frames to `/api/frame`.
+
+Setup on the host:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements-renderer.txt
+.venv/bin/python -m playwright install chromium
+```
+
+Render the included React demo once:
+
+```bash
+.venv/bin/python scripts/render-browser-to-hc800.py \
+  --api http://192.168.1.147:8099 \
+  --url http://192.168.1.147/c4kiosk/react-host-demo.html \
+  --once
+```
+
+Run it continuously at 1 FPS:
+
+```bash
+.venv/bin/python scripts/render-browser-to-hc800.py \
+  --api http://192.168.1.147:8099 \
+  --url http://192.168.1.147/c4kiosk/react-host-demo.html \
+  --fps 1
+```
+
+To drive any other React app, replace `--url` with the app URL. For mostly static dashboards, 1 FPS is usually enough. For animations, increase to 2–5 FPS and watch network/CPU load. The included demo loads React from a CDN; for offline use, serve a bundled React build from the local network.
+
+---
+
 ## API reference
 
 All endpoints are on port **8099**. CORS is open (`*`).
@@ -276,8 +316,6 @@ Requires Docker with `--platform linux/386` support (works on Apple Silicon and 
 | **Mouse cursor** | Always visible at center of screen. Can be moved off-screen via `/dev/input` events if needed. |
 | **No font embedding** | DejaVu only. Web fonts won't load over HTTPS. |
 | **Single page** | Only one URL/page can be displayed at a time. |
-
----
 
 ## Under the hood — what we discovered
 

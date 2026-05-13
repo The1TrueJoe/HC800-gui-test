@@ -14,10 +14,12 @@ node_modules/
 # Python
 __pycache__/
 *.pyc
+.venv/
 
 # Build outputs
 *.o
 *.a
+out/
 
 # Secrets / credentials
 *.pass

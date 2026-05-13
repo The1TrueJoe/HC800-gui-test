@@ -71,7 +71,7 @@ info "Remote directory ready"
 
 # ── Upload kiosk files ──────────────────────────────────────────────────────
 step "Uploading kiosk files"
-FILES=(api.js index.html start-api.sh stop-api.sh config.json install-browser.sh c4kiosk-init.sh fake-vt-shim.c fake-vt-shim.so)
+FILES=(api.js index.html start-api.sh stop-api.sh config.json install-browser.sh c4kiosk-init.sh fake-vt-shim.c fake-vt-shim.so react-host-demo.html react-host-demo.js)
 for f in "${FILES[@]}"; do
   src="$KIOSK_DIR/$f"
   if [[ ! -f "$src" ]]; then
@@ -86,7 +86,8 @@ done
 _ssh "chmod 755 '$REMOTE_DIR/api.js' '$REMOTE_DIR/start-api.sh' \
   '$REMOTE_DIR/stop-api.sh' '$REMOTE_DIR/install-browser.sh' \
   '$REMOTE_DIR/c4kiosk-init.sh' '$REMOTE_DIR/fake-vt-shim.so'; \
-  chmod 644 '$REMOTE_DIR/index.html' '$REMOTE_DIR/config.json' '$REMOTE_DIR/fake-vt-shim.c'"
+  chmod 644 '$REMOTE_DIR/index.html' '$REMOTE_DIR/config.json' '$REMOTE_DIR/fake-vt-shim.c' \
+  '$REMOTE_DIR/react-host-demo.html' '$REMOTE_DIR/react-host-demo.js'"
 info "Permissions set"
 
 # ── Run the browser installer ───────────────────────────────────────────────

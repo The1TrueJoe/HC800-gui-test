@@ -224,8 +224,10 @@ window_screen_height:720
 fb_toolbar_size:1
 fb_furniture_size:1
 fb_toolbar_layout:
+enable_javascript:1
+script_timeout:10
 EOCHOICES
-log "  Choices written: window 1280x720, toolbar hidden"
+log "  Choices written: window 1280x720, toolbar hidden, JavaScript enabled"
 
 # ── Create launcher wrapper ───────────────────────────────────────────────────
 log "Writing launcher: $BROWSER_DIR/launch.sh"

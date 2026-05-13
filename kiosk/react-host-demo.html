@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HC800 React Host Renderer Demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body, #root { width: 100%; height: 100%; margin: 0; }
+    body {
+      background: radial-gradient(circle at 20% 15%, #274472 0, transparent 30%), #09111f;
+      color: #f7fbff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      overflow: hidden;
+    }
+    .stage {
+      width: 1280px;
+      height: 720px;
+      padding: 56px;
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 32px;
+    }
+    .card {
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 28px;
+      background: rgba(10, 18, 32, .74);
+      box-shadow: 0 24px 80px rgba(0,0,0,.34);
+      padding: 36px;
+    }
+    h1 { margin: 0 0 18px; font-size: 64px; letter-spacing: -2px; }
+    .accent { color: #6ee7ff; }
+    .subtitle { color: #b9c6d8; font-size: 25px; line-height: 1.45; max-width: 720px; }
+    .metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 38px; }
+    .metric { border-radius: 18px; background: rgba(255,255,255,.08); padding: 20px; }
+    .metric b { display: block; font-size: 36px; }
+    .metric span { color: #aebed2; font-size: 15px; text-transform: uppercase; letter-spacing: .12em; }
+    .side { display: flex; flex-direction: column; justify-content: space-between; }
+    .clock { font-size: 54px; font-variant-numeric: tabular-nums; }
+    .pill { display: inline-flex; border-radius: 999px; padding: 8px 14px; background: #123d2c; color: #72f1a4; font-weight: 700; }
+    .bars { display: grid; gap: 12px; margin-top: 24px; }
+    .bar { height: 16px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden; }
+    .bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #6ee7ff, #8b5cf6); }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="stage">
+      <section class="card">
+        <h1>React demo loading…</h1>
+        <p class="subtitle">If this text remains, the host renderer has not loaded React yet.</p>
+      </section>
+    </div>
+  </div>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="react-host-demo.js"></script>
+</body>
+</html>
