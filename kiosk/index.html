@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HC800 Kiosk</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #2f81f7;
+      --green: #3fb950;
+      --red: #f85149;
+      --amber: #d29922;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ── HEADER ─────────────────────────────────────────────── */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px; border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .logo { font-size: 17px; font-weight: 700; letter-spacing: -.3px; }
+    .logo span { color: var(--accent); }
+    .pills { display: flex; gap: 8px; }
+    .pill {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 12px; font-weight: 600; padding: 3px 10px;
+      border-radius: 20px; background: #21262d; color: var(--muted);
+      transition: background .2s, color .2s;
+    }
+    .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+    .pill.green { background: #0d2116; color: var(--green); }
+    .pill.red   { background: #2d1116; color: var(--red); }
+    .pill.amber { background: #241d05; color: var(--amber); }
+
+    /* ── LAYOUT ─────────────────────────────────────────────── */
+    .wrap { max-width: 960px; margin: 0 auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 16px; }
+
+    /* ── PREVIEW ─────────────────────────────────────────────── */
+    .preview-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+    }
+    .preview-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px; border-bottom: 1px solid var(--border);
+    }
+    .preview-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+    .preview-meta  { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 10px; }
+    .preview-body { position: relative; background: #000; aspect-ratio: 16/9; }
+    canvas#preview {
+      display: block; width: 100%; height: 100%;
+      image-rendering: pixelated;
+    }
+    .preview-overlay {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,.7); font-size: 14px; color: var(--muted); flex-direction: column; gap: 8px;
+    }
+    .preview-overlay.hidden { display: none; }
+
+    /* ── URL BAR ─────────────────────────────────────────────── */
+    .url-bar {
+      display: flex; gap: 8px; align-items: stretch;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 10px 10px 10px 14px;
+    }
+    .url-bar input {
+      flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); padding: 10px 12px; font-size: 14px; min-width: 0;
+    }
+    .url-bar input:focus { outline: none; border-color: var(--accent); }
+    .url-bar input::placeholder { color: var(--muted); }
+
+    /* ── BUTTONS ─────────────────────────────────────────────── */
+    button {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      border: 0; border-radius: 8px; padding: 10px 16px;
+      font-size: 13px; font-weight: 600; color: white; cursor: pointer;
+      transition: opacity .15s, transform .1s;
+      white-space: nowrap;
+    }
+    button:hover  { opacity: .85; }
+    button:active { transform: scale(.97); }
+    button:disabled { opacity: .35; cursor: not-allowed; transform: none; }
+    .btn-accent { background: var(--accent); }
+    .btn-green  { background: #238636; }
+    .btn-red    { background: #b91c1c; }
+    .btn-gray   { background: #21262d; color: var(--text); }
+    .btn-ghost  { background: transparent; color: var(--muted); padding: 6px 10px; font-size: 12px; }
+    .btn-ghost:hover { color: var(--text); opacity: 1; }
+
+    /* ── PRESETS GRID ─────────────────────────────────────────── */
+    .presets {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px;
+    }
+    .preset-btn {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px 12px; display: flex; flex-direction: column; align-items: center; gap: 6px;
+      color: var(--text); cursor: pointer; transition: border-color .15s, background .15s;
+      font-size: 13px; font-weight: 600; text-align: center;
+    }
+    .preset-btn:hover { border-color: var(--accent); background: #1c2230; }
+    .preset-btn .icon { font-size: 22px; line-height: 1; }
+    .preset-btn .sub  { font-size: 11px; color: var(--muted); font-weight: 400; }
+
+    /* ── TOAST ─────────────────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 20px; right: 20px; z-index: 9999;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px 16px; font-size: 13px; max-width: 300px; opacity: 0;
+      transition: opacity .3s; pointer-events: none; color: var(--text);
+    }
+    #toast.show { opacity: 1; }
+    #toast.ok   { border-color: var(--green); }
+    #toast.err  { border-color: var(--red); }
+
+    /* ── RESPONSIVE ─────────────────────────────────────────── */
+    @media (max-width: 500px) {
+      .url-bar { flex-direction: column; }
+      .pills .pill:nth-child(2) { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">HC800 <span>Kiosk</span></div>
+  <div class="pills">
+    <div class="pill" id="pill-api"><span class="dot"></span> <span id="pill-api-txt">connecting…</span></div>
+    <div class="pill" id="pill-browser"><span class="dot"></span> <span id="pill-browser-txt">—</span></div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ── Live framebuffer preview ── -->
+  <div class="preview-card">
+    <div class="preview-header">
+      <div class="preview-title">Live HDMI Output · 1280 × 720</div>
+      <div class="preview-meta">
+        <span id="capture-age">—</span>
+        <button class="btn-ghost" id="btn-refresh-preview" onclick="captureNow()">↺ Refresh</button>
+      </div>
+    </div>
+    <div class="preview-body">
+      <canvas id="preview" width="1280" height="720"></canvas>
+      <div class="preview-overlay" id="preview-overlay">
+        <span style="font-size:28px">📺</span>
+        <span>Click Refresh to capture current HDMI output</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── URL input ── -->
+  <div class="url-bar">
+    <input type="url" id="url-input" placeholder="http://192.168.1.x/your-page.html" autocomplete="off" autocorrect="off">
+    <button class="btn-green" id="btn-display" onclick="displayUrl()">▶&nbsp;Display</button>
+    <button class="btn-red btn-ghost" onclick="stopBrowser()" title="Stop browser">■</button>
+  </div>
+
+  <!-- ── Preset actions ── -->
+  <div class="presets">
+    <button class="preset-btn" onclick="sendTest()">
+      <span class="icon">🎨</span>
+      Test Pattern
+      <span class="sub">Color bars + gradients</span>
+    </button>
+    <button class="preset-btn" onclick="restoreLogo()">
+      <span class="icon">🏷️</span>
+      C4 Boot Screen
+      <span class="sub">Restore logo frame</span>
+    </button>
+    <button class="preset-btn" onclick="blankScreen()">
+      <span class="icon">⬛</span>
+      Blank Screen
+      <span class="sub">All black</span>
+    </button>
+    <button class="preset-btn" onclick="stopBrowser()">
+      <span class="icon">⏹️</span>
+      Stop Browser
+      <span class="sub">Kill NetSurf-FB</span>
+    </button>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = `http://${location.hostname}:8099`;
+let capturedAt = null;
+let autoRefreshTimer = null;
+
+// ── Canvas preview ─────────────────────────────────────────────────────────
+const canvas = document.getElementById('preview');
+const ctx    = canvas.getContext('2d');
+const overlay = document.getElementById('preview-overlay');
+
+async function captureNow() {
+  const btn = document.getElementById('btn-refresh-preview');
+  btn.disabled = true;
+  btn.textContent = '⏳ Capturing…';
+  try {
+    const res = await fetch(`${API}/api/capture.raw`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const buf   = await res.arrayBuffer();
+    const raw   = new Uint8Array(buf); // BGRX
+    const frame = ctx.createImageData(1280, 720);
+    const out   = frame.data;          // RGBA
+    for (let i = 0, j = 0; i < raw.length; i += 4, j += 4) {
+      out[j]     = raw[i + 2]; // R ← B-src[2]
+      out[j + 1] = raw[i + 1]; // G
+      out[j + 2] = raw[i];     // B ← R-src[0]
+      out[j + 3] = 255;         // A
+    }
+    ctx.putImageData(frame, 0, 0);
+    overlay.classList.add('hidden');
+    capturedAt = Date.now();
+    updateCaptureAge();
+    toast('Framebuffer captured', 'ok');
+  } catch (err) {
+    toast('Capture failed: ' + (err.message || err), 'err');
+  }
+  btn.disabled = false;
+  btn.textContent = '↺ Refresh';
+}
+
+function updateCaptureAge() {
+  const el = document.getElementById('capture-age');
+  if (!capturedAt) { el.textContent = '—'; return; }
+  const s = Math.round((Date.now() - capturedAt) / 1000);
+  el.textContent = s < 60 ? `${s}s ago` : `${Math.floor(s/60)}m ago`;
+}
+setInterval(updateCaptureAge, 1000);
+
+// ── Status polling ──────────────────────────────────────────────────────────
+async function pollStatus() {
+  try {
+    const d = await apiFetch('/api/status');
+    const running = d.browser && d.browser.running;
+    const installed = d.browser && d.browser.installed;
+
+    setPill('pill-api', 'green', `v${d.version || '?'}`);
+
+    if (running) {
+      const url = (d.browser && d.browser.url) || (d.config && d.config.url) || '';
+      setPill('pill-browser', 'green', 'running');
+      const inp = document.getElementById('url-input');
+      if (!inp.value && url) inp.value = url;
+    } else if (!installed) {
+      setPill('pill-browser', 'red', 'not installed');
+    } else {
+      setPill('pill-browser', '', 'stopped');
+    }
+  } catch {
+    setPill('pill-api', 'red', 'offline');
+    setPill('pill-browser', '', '—');
+  }
+}
+
+function setPill(id, cls, text) {
+  const el = document.getElementById(id);
+  el.className = 'pill' + (cls ? ' ' + cls : '');
+  document.getElementById(id + '-txt').textContent = text;
+}
+
+// ── Actions ────────────────────────────────────────────────────────────────
+async function displayUrl() {
+  const url = document.getElementById('url-input').value.trim();
+  if (!url) { toast('Enter a URL first', 'err'); return; }
+  try {
+    const d = await apiFetch('/api/url', 'POST', { url });
+    toast(d.message || 'Launched', 'ok');
+    setTimeout(() => { pollStatus(); captureNow(); }, 4000);
+  } catch (err) { toast('Error: ' + (err.message || err), 'err'); }
+}
+
+async function stopBrowser() {
+  try {
+    await apiFetch('/api/browser/stop', 'POST', {});
+    toast('Browser stopped', 'ok');
+    setTimeout(() => { pollStatus(); captureNow(); }, 800);
+  } catch (err) { toast('Error: ' + (err.message || err), 'err'); }
+}
+
+async function sendTest() {
+  try {
+    await apiFetch('/api/test', 'POST', {});
+    toast('Test pattern written to HDMI', 'ok');
+    setTimeout(captureNow, 600);
+  } catch (err) { toast('Error: ' + (err.message || err), 'err'); }
+}
+
+async function blankScreen() {
+  try {
+    await apiFetch('/api/black', 'POST', {});
+    toast('Screen blanked', 'ok');
+    setTimeout(captureNow, 400);
+  } catch (err) { toast('Error: ' + (err.message || err), 'err'); }
+}
+
+async function restoreLogo() {
+  try {
+    await apiFetch('/api/restore-logo', 'POST', {});
+    toast('C4 boot screen restored', 'ok');
+    setTimeout(captureNow, 600);
+  } catch (err) { toast('Error: ' + (err.message || err), 'err'); }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+async function apiFetch(path, method = 'GET', body = null) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    cache: 'no-store'
+  };
+  if (body !== null) opts.body = JSON.stringify(body);
+  const res = await fetch(API + path, opts);
+  const text = await res.text();
+  try { return JSON.parse(text); } catch { return { ok: res.ok, _raw: text }; }
+}
+
+let toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (type ? ' ' + type : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 3200);
+}
+
+// ── Enter key on URL bar ───────────────────────────────────────────────────
+document.getElementById('url-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') displayUrl();
+});
+
+// ── Init ───────────────────────────────────────────────────────────────────
+pollStatus();
+setInterval(pollStatus, 12000);
+// Capture once on load after a short delay
+setTimeout(captureNow, 800);
+</script>
+</body>
+</html>

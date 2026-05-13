@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor
+.vscode/
+*.swp
+*.swo
+
+# Node
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+
+# Build outputs
+*.o
+*.a
+
+# Secrets / credentials
+*.pass
+*_pass
+token.txt
