@@ -31,9 +31,14 @@ var LOGO_RAW = process.env.C4KIOSK_LOGO_RAW || '/var/c4kiosk-logo.raw';
 var LAST_RAW = process.env.C4KIOSK_LAST_RAW || '/var/c4kiosk-last-frame.raw';
 // NetSurf-FB launcher wrapper installed by install.sh
 var BROWSER_BIN = process.env.C4KIOSK_BROWSER || '/mnt/internal/browser/launch.sh';
+var HDMI_I2CSET = process.env.C4KIOSK_I2CSET || '/usr/sbin/i2cset';
+var HDMI_I2CGET = process.env.C4KIOSK_I2CGET || '/usr/sbin/i2cget';
+var HDMI_I2C_BUS = process.env.C4KIOSK_HDMI_I2C_BUS || '6';
+var HDMI_I2C_ADDR = process.env.C4KIOSK_HDMI_I2C_ADDR || '0x39';
 
 var startedAt = Date.now();
 var lastFrame = null;
+var lastDisplayWake = null;
 
 // Browser child-process state (persists across requests)
 var browserProc = null;
@@ -52,6 +57,98 @@ function nowIso() {
 
 function log(message) {
   console.log(nowIso() + ' ' + message);
+}
+
+function commandPath(primary, fallback) {
+  return fs.existsSync(primary) ? primary : fallback;
+}
+
+function runQuiet(bin, args) {
+  try {
+    childProcess.execFileSync(bin, args, { stdio: 'ignore', timeout: 2000 });
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+function readCommand(bin, args) {
+  try {
+    return childProcess.execFileSync(bin, args, { encoding: 'utf8', timeout: 2000 }).trim();
+  } catch (err) {
+    return '';
+  }
+}
+
+function hexByte(value) {
+  value = value & 255;
+  return '0x' + (value < 16 ? '0' : '') + value.toString(16);
+}
+
+function i2cReadReg(reg) {
+  return readCommand(commandPath(HDMI_I2CGET, 'i2cget'), ['-y', HDMI_I2C_BUS, HDMI_I2C_ADDR, reg]);
+}
+
+function i2cWriteReg(reg, value) {
+  return runQuiet(commandPath(HDMI_I2CSET, 'i2cset'), ['-y', HDMI_I2C_BUS, HDMI_I2C_ADDR, reg, value]);
+}
+
+function ensureDisplayOutput(reason) {
+  var result = {
+    at: nowIso(),
+    reason: reason || 'manual',
+    mode: false,
+    unblank: false,
+    adv7511Power: false,
+    adv7511Tmds: false,
+    regs: {}
+  };
+
+  try {
+    fs.writeFileSync('/sys/class/graphics/fb0/mode', 'U:' + WIDTH + 'x' + HEIGHT + 'p-0\n');
+    result.mode = true;
+  } catch (err) {
+    result.modeError = err.message;
+  }
+
+  try {
+    fs.writeFileSync('/sys/class/graphics/fb0/blank', '0\n');
+    result.unblank = true;
+  } catch (err) {
+    result.unblankError = err.message;
+  }
+
+  // HC800 HDMI is driven by an ADV7511/ADV7513-compatible transmitter on I2C
+  // bus 6 at 7-bit address 0x39. Register 0xd6 bit 4 enables TMDS output.
+  // If this bit is clear, /dev/fb0 can contain correct pixels while HDMI says
+  // "no signal". Preserve the other register bits and set only TMDS enable.
+  var power = i2cReadReg('0x41');
+  if (power) {
+    result.regs.beforePower = power;
+    var powerValue = parseInt(power, 16);
+    if (!isNaN(powerValue)) {
+      result.adv7511Power = i2cWriteReg('0x41', hexByte(powerValue & ~0x40));
+    }
+  }
+
+  var power2 = i2cReadReg('0xd6');
+  if (power2) {
+    result.regs.beforePower2 = power2;
+    var power2Value = parseInt(power2, 16);
+    if (!isNaN(power2Value)) {
+      result.adv7511Tmds = i2cWriteReg('0xd6', hexByte(power2Value | 0x10));
+    }
+  }
+
+  result.regs.power = i2cReadReg('0x41');
+  result.regs.status = i2cReadReg('0x42');
+  result.regs.pll = i2cReadReg('0x9e');
+  result.regs.ddc = i2cReadReg('0xc8');
+  result.regs.power2 = i2cReadReg('0xd6');
+
+  lastDisplayWake = result;
+  log('display wake: ' + JSON.stringify(result));
+  return result;
 }
 
 function readText(filePath, fallback) {
@@ -125,7 +222,7 @@ function requireToken(req, parsed) {
   return supplied === token;
 }
 
-function send(res, status, body, contentType) {
+function send(res, status, body, contentType, extraHeaders) {
   var headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
@@ -133,6 +230,9 @@ function send(res, status, body, contentType) {
     'Cache-Control': 'no-store'
   };
   if (contentType) headers['Content-Type'] = contentType;
+  if (extraHeaders) {
+    Object.keys(extraHeaders).forEach(function (k) { headers[k] = extraHeaders[k]; });
+  }
   res.writeHead(status, headers);
   res.end(body);
 }
@@ -143,6 +243,71 @@ function sendJson(res, status, obj) {
 
 function notFound(res) {
   sendJson(res, 404, { ok: false, error: 'not_found' });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, function (ch) {
+    return {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    }[ch];
+  });
+}
+
+function decodeFormPart(s) {
+  try {
+    return decodeURIComponent(String(s || '').replace(/\+/g, ' '));
+  } catch (err) {
+    return String(s || '');
+  }
+}
+
+function parseUrlEncoded(text) {
+  var out = {};
+  String(text || '').split('&').forEach(function (part) {
+    if (!part) return;
+    var idx = part.indexOf('=');
+    var key = idx >= 0 ? part.slice(0, idx) : part;
+    var val = idx >= 0 ? part.slice(idx + 1) : '';
+    out[decodeFormPart(key)] = decodeFormPart(val);
+  });
+  return out;
+}
+
+function isFormRequest(req) {
+  var ct = String(req.headers['content-type'] || '').toLowerCase();
+  return ct.indexOf('application/x-www-form-urlencoded') >= 0 || ct.indexOf('multipart/form-data') >= 0;
+}
+
+function controlPanelUrl(req) {
+  var referer = String(req.headers.referer || '');
+  if (/^https?:\/\//i.test(referer)) return referer;
+  var host = String(req.headers.host || '').split(':')[0] || '192.168.1.147';
+  return 'http://' + host + '/c4kiosk/';
+}
+
+function sendHtmlAction(res, status, title, message, backUrl, details) {
+  var body = '<!doctype html><html><head><meta charset="utf-8">' +
+    '<meta http-equiv="refresh" content="2;url=' + escapeHtml(backUrl) + '">' +
+    '<title>' + escapeHtml(title) + '</title>' +
+    '<style>body{margin:0;background:#111827;color:#e5e7eb;font-family:Arial,sans-serif}' +
+    'main{max-width:760px;margin:0 auto;padding:32px 20px}pre{white-space:pre-wrap;background:#020617;padding:12px}' +
+    'a{color:#93c5fd}</style></head><body><main>' +
+    '<h1>' + escapeHtml(title) + '</h1><p>' + escapeHtml(message) + '</p>' +
+    '<p><a href="' + escapeHtml(backUrl) + '">Back to kiosk control</a></p>' +
+    '<pre>' + escapeHtml(JSON.stringify(details || {}, null, 2)) + '</pre>' +
+    '</main></body></html>';
+  send(res, status, body, 'text/html; charset=utf-8');
+}
+
+function sendActionResult(req, res, status, obj, title, message) {
+  if (isFormRequest(req)) {
+    return sendHtmlAction(res, status, title || (obj.ok ? 'Command complete' : 'Command failed'), message || obj.message || obj.error || '', controlPanelUrl(req), obj);
+  }
+  return sendJson(res, status, obj);
 }
 
 // ── Browser process management ─────────────────────────────────────────────
@@ -189,6 +354,7 @@ function startBrowser(targetUrl, cb) {
     return;
   }
   stopBrowser(function () {
+    ensureDisplayOutput('browser-start');
     log('startBrowser: ' + targetUrl);
     var env = {};
     Object.keys(process.env).forEach(function (k) { env[k] = process.env[k]; });
@@ -281,6 +447,7 @@ function writeFrameBuffer(buf) {
   if (buf.length !== FRAME_SIZE) {
     throw new Error('bad_frame_size:' + buf.length + ':expected:' + FRAME_SIZE);
   }
+  ensureDisplayOutput('frame-write');
   fs.writeFileSync(LAST_RAW, buf);
   fs.writeFileSync(FB, buf);
   lastFrame = {
@@ -368,6 +535,7 @@ function status() {
     framebuffer: framebufferInfo(),
     config: getConfig(),
     lastFrame: lastFrame,
+    displayWake: lastDisplayWake,
     logoRawExists: fs.existsSync(LOGO_RAW),
     lastRawExists: fs.existsSync(LAST_RAW),
     browser: {
@@ -393,18 +561,42 @@ function handlePostJson(req, res, cb) {
   });
 }
 
+function handlePostObject(req, res, cb) {
+  readBody(req, 65536, function (err, body) {
+    var text;
+    if (err) return sendActionResult(req, res, 400, { ok: false, error: err.message }, 'Bad request', err.message);
+    text = body.toString('utf8') || '';
+    if (isFormRequest(req)) return cb(parseUrlEncoded(text));
+    try {
+      cb(JSON.parse(text || '{}'));
+    } catch (parseErr) {
+      sendActionResult(req, res, 400, { ok: false, error: 'bad_json' }, 'Bad request', 'bad_json');
+    }
+  });
+}
+
 function route(req, res) {
   var parsed = url.parse(req.url, true);
   var p = parsed.pathname;
 
   if (req.method === 'OPTIONS') return send(res, 204, '', 'text/plain');
 
-  if (p === '/' || p === '/api' || p === '/api/') {
+  // Serve the control panel UI directly from port 8099
+  if (req.method === 'GET' && (p === '/' || p === '/kiosk' || p === '/index.html')) {
+    try {
+      var html = fs.readFileSync(path.join(ROOT, 'index.html'));
+      return send(res, 200, html, 'text/html; charset=utf-8');
+    } catch (readErr) {
+      return sendJson(res, 500, { ok: false, error: 'index.html not found: ' + readErr.message });
+    }
+  }
+
+  if (p === '/api' || p === '/api/') {
     return sendJson(res, 200, {
       ok: true,
       name: 'c4hc800-kiosk-api',
       version: VERSION,
-      endpoints: ['/api/status', '/api/config', '/api/url', '/api/browser', '/api/frame', '/api/test', '/api/black', '/api/restore-logo', '/api/capture.raw', '/api/browser/stop']
+      endpoints: ['/api/status', '/api/config', '/api/url', '/api/browser', '/api/display/wake', '/api/frame', '/api/test', '/api/black', '/api/restore-logo', '/api/framebuffer', '/api/capture.raw', '/api/browser/stop']
     });
   }
 
@@ -445,7 +637,11 @@ function route(req, res) {
   }
 
   if (req.method === 'POST' && !requireToken(req, parsed)) {
-    return sendJson(res, 403, { ok: false, error: 'bad_token' });
+    return sendActionResult(req, res, 403, { ok: false, error: 'bad_token' }, 'Forbidden', 'The request token was missing or incorrect.');
+  }
+
+  if (p === '/api/display/wake' && req.method === 'POST') {
+    return sendActionResult(req, res, 200, { ok: true, displayWake: ensureDisplayOutput('api-display-wake') }, 'HDMI wake command sent', 'The framebuffer mode, blanking state, and HDMI transmitter were reasserted.');
   }
 
   if (p === '/api/config' && req.method === 'POST') {
@@ -466,19 +662,19 @@ function route(req, res) {
 
   // POST /api/url — set the URL to display and launch the browser immediately
   if (p === '/api/url' && req.method === 'POST') {
-    return handlePostJson(req, res, function (obj) {
+    return handlePostObject(req, res, function (obj) {
       if (typeof obj.url !== 'string' || !obj.url.trim()) {
-        return sendJson(res, 400, { ok: false, error: 'url field required (string)' });
+        return sendActionResult(req, res, 400, { ok: false, error: 'url field required (string)' }, 'Missing URL', 'Enter a URL before pressing Display.');
       }
       var cfg = setConfig({ url: obj.url.trim(), enabled: true });
       startBrowser(cfg.url, function (err) {
-        if (err) return sendJson(res, 503, { ok: false, error: err.message });
-        sendJson(res, 200, {
+        if (err) return sendActionResult(req, res, 503, { ok: false, error: err.message }, 'Browser launch failed', err.message);
+        sendActionResult(req, res, 200, {
           ok: true,
           url: cfg.url,
           pid: browserState.pid,
           message: 'browser launched — URL should appear on HDMI output'
-        });
+        }, 'Browser launched', 'The URL should appear on HDMI output in a few seconds.');
       });
     });
   }
@@ -486,7 +682,7 @@ function route(req, res) {
   // POST /api/browser/stop — stop the browser, leave framebuffer as-is
   if (p === '/api/browser/stop' && req.method === 'POST') {
     stopBrowser(function () {
-      sendJson(res, 200, { ok: true, message: 'browser stopped' });
+      sendActionResult(req, res, 200, { ok: true, message: 'browser stopped' }, 'Browser stopped', 'NetSurf-FB was stopped.');
     });
     return;
   }
@@ -510,9 +706,9 @@ function route(req, res) {
     stopBrowser(function () {
       try {
         writeFrameBuffer(makeTestPattern());
-        sendJson(res, 200, { ok: true, bytes: FRAME_SIZE, at: lastFrame.at });
+        sendActionResult(req, res, 200, { ok: true, bytes: FRAME_SIZE, at: lastFrame.at }, 'Test pattern written', 'A test pattern was written directly to the framebuffer.');
       } catch (err) {
-        sendJson(res, 500, { ok: false, error: err.message });
+        sendActionResult(req, res, 500, { ok: false, error: err.message }, 'Test pattern failed', err.message);
       }
     });
     return;
@@ -522,9 +718,9 @@ function route(req, res) {
     stopBrowser(function () {
       try {
         writeFrameBuffer(makeBlackFrame());
-        sendJson(res, 200, { ok: true, bytes: FRAME_SIZE, at: lastFrame.at });
+        sendActionResult(req, res, 200, { ok: true, bytes: FRAME_SIZE, at: lastFrame.at }, 'Screen blanked', 'A black frame was written directly to the framebuffer.');
       } catch (err) {
-        sendJson(res, 500, { ok: false, error: err.message });
+        sendActionResult(req, res, 500, { ok: false, error: err.message }, 'Blank failed', err.message);
       }
     });
     return;
@@ -535,7 +731,24 @@ function route(req, res) {
       var logo = fs.readFileSync(LOGO_RAW);
       writeFrameBuffer(logo);
       lastFrame.source = 'restore-logo';
-      return sendJson(res, 200, { ok: true, bytes: logo.length, at: lastFrame.at });
+      return sendActionResult(req, res, 200, { ok: true, bytes: logo.length, at: lastFrame.at }, 'Logo restored', 'The saved startup framebuffer was restored.');
+    } catch (err) {
+      return sendActionResult(req, res, 500, { ok: false, error: err.message }, 'Restore failed', err.message);
+    }
+  }
+
+  // GET /api/framebuffer — current framebuffer as raw BGRX bytes.
+  // Response headers describe geometry so clients need no out-of-band config.
+  if (p === '/api/framebuffer' && req.method === 'GET') {
+    try {
+      var fbBuf = readFixed(FB, FRAME_SIZE);
+      return send(res, 200, fbBuf, 'application/octet-stream', {
+        'X-FB-Width':  String(WIDTH),
+        'X-FB-Height': String(HEIGHT),
+        'X-FB-Stride': String(STRIDE),
+        'X-FB-Format': 'bgrx',
+        'X-FB-Bytes':  String(FRAME_SIZE)
+      });
     } catch (err) {
       return sendJson(res, 500, { ok: false, error: err.message });
     }
@@ -558,6 +771,18 @@ var server = http.createServer(route);
 server.listen(PORT, '0.0.0.0', function () {
   log('c4hc800-kiosk-api listening on 0.0.0.0:' + PORT);
   log('browser bin: ' + BROWSER_BIN + (fs.existsSync(BROWSER_BIN) ? ' (installed)' : ' (NOT INSTALLED — run install.sh)'));
+
+  ensureDisplayOutput('startup');
+
+  // Re-assert HDMI after short delays to win the race against Control4 director
+  // which may reset the ADV7511 transmitter during its own startup sequence.
+  setTimeout(function () { ensureDisplayOutput('startup-retry-5s'); }, 5000);
+  setTimeout(function () { ensureDisplayOutput('startup-retry-30s'); }, 30000);
+
+  // Periodic re-assertion while browser is running to keep signal alive.
+  setInterval(function () {
+    if (isBrowserRunning()) ensureDisplayOutput('periodic');
+  }, 120000);
 
   // Auto-launch browser on startup if a URL is configured
   var _cfg = getConfig();

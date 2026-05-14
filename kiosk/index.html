@@ -6,345 +6,398 @@
   <title>HC800 Kiosk</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg: #0d1117;
-      --surface: #161b22;
-      --border: #30363d;
-      --text: #e6edf3;
-      --muted: #8b949e;
-      --accent: #2f81f7;
-      --green: #3fb950;
-      --red: #f85149;
-      --amber: #d29922;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    html { font-size: 14px; }
+    body {
+      background: #0d1117;
+      color: #c9d1d9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
+      line-height: 1.5;
+      min-height: 100vh;
     }
-    body { background: var(--bg); color: var(--text); min-height: 100vh; }
+    .wrap { max-width: 1060px; margin: 0 auto; padding: 20px 16px 40px; }
 
-    /* ── HEADER ─────────────────────────────────────────────── */
     header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 20px; border-bottom: 1px solid var(--border);
-      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid #21262d;
     }
-    .logo { font-size: 17px; font-weight: 700; letter-spacing: -.3px; }
-    .logo span { color: var(--accent); }
-    .pills { display: flex; gap: 8px; }
-    .pill {
-      display: flex; align-items: center; gap: 5px;
-      font-size: 12px; font-weight: 600; padding: 3px 10px;
-      border-radius: 20px; background: #21262d; color: var(--muted);
-      transition: background .2s, color .2s;
-    }
-    .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-    .pill.green { background: #0d2116; color: var(--green); }
-    .pill.red   { background: #2d1116; color: var(--red); }
-    .pill.amber { background: #241d05; color: var(--amber); }
+    header h1 { font-size: 16px; font-weight: 600; color: #f0f6fc; letter-spacing: .01em; }
+    .badges { display: flex; flex-wrap: wrap; gap: 5px; }
 
-    /* ── LAYOUT ─────────────────────────────────────────────── */
-    .wrap { max-width: 960px; margin: 0 auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 16px; }
+    .badge {
+      font-size: 11px; font-weight: 600;
+      padding: 2px 9px; border-radius: 20px;
+      background: #21262d; color: #6e7681; border: 1px solid #30363d;
+      white-space: nowrap; transition: background .15s;
+    }
+    .badge.ok   { background: #0e2e19; color: #3fb950; border-color: #238636; }
+    .badge.warn { background: #2b2007; color: #e3b341; border-color: #9e6a03; }
+    .badge.err  { background: #2d0f0f; color: #f47067; border-color: #da3633; }
 
-    /* ── PREVIEW ─────────────────────────────────────────────── */
-    .preview-card {
-      background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
-    }
-    .preview-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 10px 14px; border-bottom: 1px solid var(--border);
-    }
-    .preview-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
-    .preview-meta  { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 10px; }
-    .preview-body { position: relative; background: #000; aspect-ratio: 16/9; }
-    canvas#preview {
-      display: block; width: 100%; height: 100%;
-      image-rendering: pixelated;
-    }
-    .preview-overlay {
-      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-      background: rgba(0,0,0,.7); font-size: 14px; color: var(--muted); flex-direction: column; gap: 8px;
-    }
-    .preview-overlay.hidden { display: none; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
 
-    /* ── URL BAR ─────────────────────────────────────────────── */
-    .url-bar {
-      display: flex; gap: 8px; align-items: stretch;
-      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-      padding: 10px 10px 10px 14px;
+    .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
+    .card-title {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .06em; color: #6e7681; margin-bottom: 12px;
     }
-    .url-bar input {
-      flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
-      color: var(--text); padding: 10px 12px; font-size: 14px; min-width: 0;
-    }
-    .url-bar input:focus { outline: none; border-color: var(--accent); }
-    .url-bar input::placeholder { color: var(--muted); }
+    .card.full { grid-column: 1 / -1; }
+    .mt12 { margin-top: 12px; }
 
-    /* ── BUTTONS ─────────────────────────────────────────────── */
-    button {
-      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-      border: 0; border-radius: 8px; padding: 10px 16px;
-      font-size: 13px; font-weight: 600; color: white; cursor: pointer;
-      transition: opacity .15s, transform .1s;
-      white-space: nowrap;
-    }
-    button:hover  { opacity: .85; }
-    button:active { transform: scale(.97); }
-    button:disabled { opacity: .35; cursor: not-allowed; transform: none; }
-    .btn-accent { background: var(--accent); }
-    .btn-green  { background: #238636; }
-    .btn-red    { background: #b91c1c; }
-    .btn-gray   { background: #21262d; color: var(--text); }
-    .btn-ghost  { background: transparent; color: var(--muted); padding: 6px 10px; font-size: 12px; }
-    .btn-ghost:hover { color: var(--text); opacity: 1; }
+    .url-row { display: flex; gap: 6px; }
+    .url-row input { flex: 1; }
 
-    /* ── PRESETS GRID ─────────────────────────────────────────── */
-    .presets {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px;
+    input[type=text] {
+      background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+      color: #c9d1d9; font-size: 13px; padding: 7px 10px; width: 100%;
+      outline: none; transition: border-color .15s;
     }
-    .preset-btn {
-      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-      padding: 14px 12px; display: flex; flex-direction: column; align-items: center; gap: 6px;
-      color: var(--text); cursor: pointer; transition: border-color .15s, background .15s;
-      font-size: 13px; font-weight: 600; text-align: center;
-    }
-    .preset-btn:hover { border-color: var(--accent); background: #1c2230; }
-    .preset-btn .icon { font-size: 22px; line-height: 1; }
-    .preset-btn .sub  { font-size: 11px; color: var(--muted); font-weight: 400; }
+    input[type=text]:focus { border-color: #1f6feb; box-shadow: 0 0 0 3px rgba(31,111,235,.15); }
 
-    /* ── TOAST ─────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+      border-radius: 6px; border: 1px solid #30363d;
+      font-size: 12px; font-weight: 500; padding: 6px 13px;
+      cursor: pointer; background: #21262d; color: #c9d1d9; white-space: nowrap;
+      transition: background .12s, border-color .12s;
+    }
+    .btn:hover       { background: #30363d; border-color: #8b949e; }
+    .btn.blue        { background: #1f6feb; color: #fff; border-color: #1f6feb; }
+    .btn.blue:hover  { background: #388bfd; border-color: #388bfd; }
+    .btn.green       { background: #1a3a22; color: #3fb950; border-color: #238636; }
+    .btn.green:hover { background: #238636; color: #fff; }
+    .btn.red         { background: #2d0f0f; color: #f47067; border-color: #da3633; }
+    .btn.red:hover   { background: #da3633; color: #fff; }
+    .btn.amber       { background: #271700; color: #e3b341; border-color: #9e6a03; }
+    .btn.amber:hover { background: #9e6a03; color: #fff; }
+    .btn:disabled    { opacity: .35; cursor: default; pointer-events: none; }
+
+    .btn-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    form.btn-wrap { display: contents; }
+
+    pre {
+      background: #0d1117; border: 1px solid #21262d; border-radius: 6px;
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+      font-size: 11px; color: #8b949e; padding: 10px 12px;
+      white-space: pre-wrap; word-break: break-word;
+      max-height: 280px; overflow: auto; line-height: 1.55;
+    }
+
+    #canvas-wrap { display: none; margin-top: 12px; }
+    #canvas-wrap canvas {
+      display: block; width: 100%; height: auto;
+      border: 1px solid #30363d; border-radius: 4px; background: #000;
+    }
+    .preview-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+    select {
+      background: #21262d; border: 1px solid #30363d; border-radius: 6px;
+      color: #c9d1d9; font-size: 12px; padding: 5px 8px; outline: none; cursor: pointer;
+    }
+    #preview-stat { font-size: 11px; color: #6e7681; }
+
     #toast {
-      position: fixed; bottom: 20px; right: 20px; z-index: 9999;
-      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-      padding: 12px 16px; font-size: 13px; max-width: 300px; opacity: 0;
-      transition: opacity .3s; pointer-events: none; color: var(--text);
+      position: fixed; bottom: 18px; right: 18px;
+      background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+      font-size: 13px; color: #c9d1d9; padding: 9px 16px;
+      display: none; z-index: 100; max-width: 300px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.5);
     }
-    #toast.show { opacity: 1; }
-    #toast.ok   { border-color: var(--green); }
-    #toast.err  { border-color: var(--red); }
+    #toast.ok  { border-color: #238636; color: #3fb950; }
+    #toast.err { border-color: #da3633; color: #f47067; }
 
-    /* ── RESPONSIVE ─────────────────────────────────────────── */
-    @media (max-width: 500px) {
-      .url-bar { flex-direction: column; }
-      .pills .pill:nth-child(2) { display: none; }
-    }
+    .note { font-size: 11px; color: #6e7681; margin-top: 8px; }
   </style>
 </head>
 <body>
-
-<header>
-  <div class="logo">HC800 <span>Kiosk</span></div>
-  <div class="pills">
-    <div class="pill" id="pill-api"><span class="dot"></span> <span id="pill-api-txt">connecting…</span></div>
-    <div class="pill" id="pill-browser"><span class="dot"></span> <span id="pill-browser-txt">—</span></div>
-  </div>
-</header>
-
 <div class="wrap">
 
-  <!-- ── Live framebuffer preview ── -->
-  <div class="preview-card">
-    <div class="preview-header">
-      <div class="preview-title">Live HDMI Output · 1280 × 720</div>
-      <div class="preview-meta">
-        <span id="capture-age">—</span>
-        <button class="btn-ghost" id="btn-refresh-preview" onclick="captureNow()">↺ Refresh</button>
+  <header>
+    <h1>HC800 Kiosk</h1>
+    <div class="badges">
+      <span id="badge-api"     class="badge">api</span>
+      <span id="badge-browser" class="badge">browser</span>
+      <span id="badge-hdmi"    class="badge">hdmi</span>
+    </div>
+  </header>
+
+  <div class="grid">
+
+    <div class="card">
+      <div class="card-title">Browser</div>
+      <form id="form-url" method="post" action="/api/url" data-api-path="/api/url">
+        <div class="url-row">
+          <input id="display-url" name="url" type="text" placeholder="http://…" autocomplete="off">
+          <button class="btn blue" type="submit">Display</button>
+        </div>
+      </form>
+      <div class="btn-row">
+        <form class="btn-wrap" method="post" action="/api/browser/stop" data-api-path="/api/browser/stop">
+          <button class="btn" type="submit">Stop</button>
+        </form>
+        <form class="btn-wrap" method="post" action="/api/display/wake" data-api-path="/api/display/wake">
+          <button class="btn" type="submit">Wake HDMI</button>
+        </form>
+        <button class="btn" type="button" onclick="refreshStatus()">Refresh</button>
+      </div>
+      <p class="note">URL is saved to config.json and auto-launches on API start.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Framebuffer</div>
+      <p class="note" style="margin-bottom:10px">Writes directly to /dev/fb0 &mdash; stops browser first.</p>
+      <div class="btn-row">
+        <form class="btn-wrap" method="post" action="/api/test" data-api-path="/api/test">
+          <button class="btn amber" type="submit">Test pattern</button>
+        </form>
+        <form class="btn-wrap" method="post" action="/api/black" data-api-path="/api/black">
+          <button class="btn red" type="submit">Blank</button>
+        </form>
+        <form class="btn-wrap" method="post" action="/api/restore-logo" data-api-path="/api/restore-logo">
+          <button class="btn" type="submit">Restore logo</button>
+        </form>
       </div>
     </div>
-    <div class="preview-body">
-      <canvas id="preview" width="1280" height="720"></canvas>
-      <div class="preview-overlay" id="preview-overlay">
-        <span style="font-size:28px">📺</span>
-        <span>Click Refresh to capture current HDMI output</span>
+
+    <div class="card">
+      <div class="card-title">API Status</div>
+      <pre id="status-pre">Loading&#8230;</pre>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Quick Reference</div>
+      <pre id="curl-pre"># Framebuffer (raw BGRX):
+curl http://HC800:8099/api/framebuffer -o frame.raw</pre>
+    </div>
+
+    <div class="card full mt12">
+      <div class="card-title">Framebuffer Preview</div>
+      <div class="preview-bar">
+        <button class="btn" type="button" onclick="capturePreview()">Capture</button>
+        <button class="btn" type="button" id="btn-live" onclick="toggleLive()">&#9654; Live</button>
+        <select id="fps-select">
+          <option value="2000">0.5 fps</option>
+          <option value="1000" selected>1 fps</option>
+          <option value="500">2 fps</option>
+          <option value="250">4 fps</option>
+          <option value="200">5 fps</option>
+        </select>
+        <span id="preview-stat"></span>
+      </div>
+      <div id="canvas-wrap">
+        <canvas id="preview" width="1280" height="720"></canvas>
       </div>
     </div>
-  </div>
 
-  <!-- ── URL input ── -->
-  <div class="url-bar">
-    <input type="url" id="url-input" placeholder="http://192.168.1.x/your-page.html" autocomplete="off" autocorrect="off">
-    <button class="btn-green" id="btn-display" onclick="displayUrl()">▶&nbsp;Display</button>
-    <button class="btn-red btn-ghost" onclick="stopBrowser()" title="Stop browser">■</button>
   </div>
-
-  <!-- ── Preset actions ── -->
-  <div class="presets">
-    <button class="preset-btn" onclick="sendTest()">
-      <span class="icon">🎨</span>
-      Test Pattern
-      <span class="sub">Color bars + gradients</span>
-    </button>
-    <button class="preset-btn" onclick="restoreLogo()">
-      <span class="icon">🏷️</span>
-      C4 Boot Screen
-      <span class="sub">Restore logo frame</span>
-    </button>
-    <button class="preset-btn" onclick="blankScreen()">
-      <span class="icon">⬛</span>
-      Blank Screen
-      <span class="sub">All black</span>
-    </button>
-    <button class="preset-btn" onclick="stopBrowser()">
-      <span class="icon">⏹️</span>
-      Stop Browser
-      <span class="sub">Kill NetSurf-FB</span>
-    </button>
-  </div>
-
 </div>
 
 <div id="toast"></div>
 
 <script>
-const API = `http://${location.hostname}:8099`;
-let capturedAt = null;
-let autoRefreshTimer = null;
+(function () {
+  "use strict";
 
-// ── Canvas preview ─────────────────────────────────────────────────────────
-const canvas = document.getElementById('preview');
-const ctx    = canvas.getContext('2d');
-const overlay = document.getElementById('preview-overlay');
+  var statusPre  = document.getElementById("status-pre");
+  var urlInput   = document.getElementById("display-url");
+  var toastTimer = null;
+  var liveTimer  = null;
+  var liveCount  = 0;
 
-async function captureNow() {
-  const btn = document.getElementById('btn-refresh-preview');
-  btn.disabled = true;
-  btn.textContent = '⏳ Capturing…';
-  try {
-    const res = await fetch(`${API}/api/capture.raw`, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const buf   = await res.arrayBuffer();
-    const raw   = new Uint8Array(buf); // BGRX
-    const frame = ctx.createImageData(1280, 720);
-    const out   = frame.data;          // RGBA
-    for (let i = 0, j = 0; i < raw.length; i += 4, j += 4) {
-      out[j]     = raw[i + 2]; // R ← B-src[2]
-      out[j + 1] = raw[i + 1]; // G
-      out[j + 2] = raw[i];     // B ← R-src[0]
-      out[j + 3] = 255;         // A
-    }
-    ctx.putImageData(frame, 0, 0);
-    overlay.classList.add('hidden');
-    capturedAt = Date.now();
-    updateCaptureAge();
-    toast('Framebuffer captured', 'ok');
-  } catch (err) {
-    toast('Capture failed: ' + (err.message || err), 'err');
+  function esc(s) {
+    return String(s).replace(/[&<>]/g, function (c) {
+      return c === "&" ? "&amp;" : c === "<" ? "&lt;" : "&gt;";
+    });
   }
-  btn.disabled = false;
-  btn.textContent = '↺ Refresh';
-}
 
-function updateCaptureAge() {
-  const el = document.getElementById('capture-age');
-  if (!capturedAt) { el.textContent = '—'; return; }
-  const s = Math.round((Date.now() - capturedAt) / 1000);
-  el.textContent = s < 60 ? `${s}s ago` : `${Math.floor(s/60)}m ago`;
-}
-setInterval(updateCaptureAge, 1000);
-
-// ── Status polling ──────────────────────────────────────────────────────────
-async function pollStatus() {
-  try {
-    const d = await apiFetch('/api/status');
-    const running = d.browser && d.browser.running;
-    const installed = d.browser && d.browser.installed;
-
-    setPill('pill-api', 'green', `v${d.version || '?'}`);
-
-    if (running) {
-      const url = (d.browser && d.browser.url) || (d.config && d.config.url) || '';
-      setPill('pill-browser', 'green', 'running');
-      const inp = document.getElementById('url-input');
-      if (!inp.value && url) inp.value = url;
-    } else if (!installed) {
-      setPill('pill-browser', 'red', 'not installed');
-    } else {
-      setPill('pill-browser', '', 'stopped');
-    }
-  } catch {
-    setPill('pill-api', 'red', 'offline');
-    setPill('pill-browser', '', '—');
+  function toast(msg, cls) {
+    var el = document.getElementById("toast");
+    if (!el) return;
+    el.textContent = msg;
+    el.className = cls || "";
+    el.style.display = "block";
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.style.display = "none"; }, 4000);
   }
-}
 
-function setPill(id, cls, text) {
-  const el = document.getElementById(id);
-  el.className = 'pill' + (cls ? ' ' + cls : '');
-  document.getElementById(id + '-txt').textContent = text;
-}
+  function xhrJson(method, path, body, cb) {
+    var r;
+    try { r = new XMLHttpRequest(); } catch (e) { cb(e); return; }
+    r.open(method, path, true);
+    r.setRequestHeader("Content-Type", "application/json");
+    r.onreadystatechange = function () {
+      if (r.readyState !== 4) return;
+      var d;
+      try { d = JSON.parse(r.responseText); } catch (e) { d = { ok: r.status < 300 }; }
+      if (r.status < 200 || r.status >= 300) { cb(new Error("HTTP " + r.status + " " + (d.error || ""))); return; }
+      cb(null, d);
+    };
+    r.onerror = function () { cb(new Error("Network error")); };
+    r.send(body ? JSON.stringify(body) : null);
+  }
 
-// ── Actions ────────────────────────────────────────────────────────────────
-async function displayUrl() {
-  const url = document.getElementById('url-input').value.trim();
-  if (!url) { toast('Enter a URL first', 'err'); return; }
-  try {
-    const d = await apiFetch('/api/url', 'POST', { url });
-    toast(d.message || 'Launched', 'ok');
-    setTimeout(() => { pollStatus(); captureNow(); }, 4000);
-  } catch (err) { toast('Error: ' + (err.message || err), 'err'); }
-}
+  function setBadge(id, cls, text) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.className = "badge" + (cls ? " " + cls : "");
+    el.textContent = text;
+  }
 
-async function stopBrowser() {
-  try {
-    await apiFetch('/api/browser/stop', 'POST', {});
-    toast('Browser stopped', 'ok');
-    setTimeout(() => { pollStatus(); captureNow(); }, 800);
-  } catch (err) { toast('Error: ' + (err.message || err), 'err'); }
-}
+  function applyStatus(d) {
+    var running   = d.browser && d.browser.running;
+    var installed = d.browser && d.browser.installed;
+    var url       = (d.browser && d.browser.url) || (d.config && d.config.url) || "";
+    var wake      = d.displayWake || {};
+    var hdmiOk    = wake.mode && wake.unblank && wake.adv7511Tmds;
+    setBadge("badge-api",     d.ok ? "ok" : "err",  "api " + (d.version || "?"));
+    setBadge("badge-browser", running ? "ok" : (installed ? "" : "err"),
+             running ? "browser on" : (installed ? "browser off" : "not installed"));
+    setBadge("badge-hdmi", hdmiOk ? "ok" : "warn", hdmiOk ? "hdmi ok" : "hdmi ?");
+    if (url && !urlInput.value) urlInput.value = url;
+    try { statusPre.textContent = JSON.stringify(d, null, 2); } catch (e) {}
+  }
 
-async function sendTest() {
-  try {
-    await apiFetch('/api/test', 'POST', {});
-    toast('Test pattern written to HDMI', 'ok');
-    setTimeout(captureNow, 600);
-  } catch (err) { toast('Error: ' + (err.message || err), 'err'); }
-}
-
-async function blankScreen() {
-  try {
-    await apiFetch('/api/black', 'POST', {});
-    toast('Screen blanked', 'ok');
-    setTimeout(captureNow, 400);
-  } catch (err) { toast('Error: ' + (err.message || err), 'err'); }
-}
-
-async function restoreLogo() {
-  try {
-    await apiFetch('/api/restore-logo', 'POST', {});
-    toast('C4 boot screen restored', 'ok');
-    setTimeout(captureNow, 600);
-  } catch (err) { toast('Error: ' + (err.message || err), 'err'); }
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-async function apiFetch(path, method = 'GET', body = null) {
-  const opts = {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    cache: 'no-store'
+  window.refreshStatus = function () {
+    xhrJson("GET", "/api/status", null, function (err, d) {
+      if (err) { setBadge("badge-api", "err", "offline"); statusPre.textContent = "API unreachable"; return; }
+      applyStatus(d);
+    });
   };
-  if (body !== null) opts.body = JSON.stringify(body);
-  const res = await fetch(API + path, opts);
-  const text = await res.text();
-  try { return JSON.parse(text); } catch { return { ok: res.ok, _raw: text }; }
-}
 
-let toastTimer;
-function toast(msg, type = '') {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = 'show' + (type ? ' ' + type : '');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.className = ''; }, 3200);
-}
+  var urlForm = document.getElementById("form-url");
+  if (urlForm) {
+    urlForm.onsubmit = function (e) {
+      e.preventDefault();
+      var u = urlInput.value.replace(/^\s+|\s+$/g, "");
+      if (!u) { toast("Enter a URL first", "err"); return; }
+      xhrJson("POST", "/api/url", { url: u }, function (err, d) {
+        if (err) { toast(err.message, "err"); return; }
+        toast((d && d.message) || "Browser launched", "ok");
+        setTimeout(refreshStatus, 2000);
+      });
+    };
+  }
 
-// ── Enter key on URL bar ───────────────────────────────────────────────────
-document.getElementById('url-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') displayUrl();
-});
+  var allForms = document.getElementsByTagName("form");
+  for (var fi = 0; fi < allForms.length; fi++) {
+    (function (f) {
+      if (f.id === "form-url") return;
+      var p = f.getAttribute("data-api-path");
+      if (!p) return;
+      f.onsubmit = function (e) {
+        e.preventDefault();
+        xhrJson("POST", p, {}, function (err, d) {
+          if (err) { toast(err.message, "err"); return; }
+          toast((d && d.message) || "Done", "ok");
+          setTimeout(refreshStatus, 1000);
+        });
+      };
+    }(allForms[fi]));
+  }
 
-// ── Init ───────────────────────────────────────────────────────────────────
-pollStatus();
-setInterval(pollStatus, 12000);
-// Capture once on load after a short delay
-setTimeout(captureNow, 800);
+  function fetchFb(cb) {
+    var canvas = document.getElementById("preview");
+    var ctx, r;
+    if (!canvas || !canvas.getContext || !window.Uint8Array) { cb(new Error("No canvas")); return; }
+    ctx = canvas.getContext("2d");
+    if (!ctx) { cb(new Error("No 2D context")); return; }
+    try { r = new XMLHttpRequest(); } catch (e) { cb(e); return; }
+    try { r.responseType = "arraybuffer"; } catch (e) { cb(new Error("No arraybuffer")); return; }
+    r.open("GET", "/api/framebuffer?t=" + Date.now(), true);
+    r.onreadystatechange = function () {
+      if (r.readyState !== 4) return;
+      if (r.status < 200 || r.status >= 300) { cb(new Error("HTTP " + r.status)); return; }
+      try {
+        var w = parseInt(r.getResponseHeader("X-FB-Width")  || "1280", 10) || 1280;
+        var h = parseInt(r.getResponseHeader("X-FB-Height") || "720",  10) || 720;
+        var s = parseInt(r.getResponseHeader("X-FB-Stride") || String(w * 4), 10) || w * 4;
+        var raw = new Uint8Array(r.response);
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        var img = ctx.createImageData(w, h);
+        var px  = img.data;
+        for (var row = 0; row < h; row++) {
+          for (var col = 0; col < w; col++) {
+            var si = row * s + col * 4;
+            var di = (row * w + col) * 4;
+            px[di]     = raw[si + 2];
+            px[di + 1] = raw[si + 1];
+            px[di + 2] = raw[si];
+            px[di + 3] = 255;
+          }
+        }
+        ctx.putImageData(img, 0, 0);
+        document.getElementById("canvas-wrap").style.display = "block";
+        cb(null);
+      } catch (e) { cb(e); }
+    };
+    r.onerror = function () { cb(new Error("Network error")); };
+    r.send(null);
+  }
+
+  window.capturePreview = function () {
+    fetchFb(function (err) {
+      if (err) toast("Capture failed: " + err.message, "err");
+      else toast("Captured", "ok");
+    });
+  };
+
+  function stopLive() {
+    if (liveTimer) { clearTimeout(liveTimer); liveTimer = null; }
+    var b = document.getElementById("btn-live");
+    if (b) b.innerHTML = "&#9654; Live";
+  }
+
+  function doLiveFrame() {
+    fetchFb(function (err) {
+      if (err) { stopLive(); toast("Live stopped: " + err.message, "err"); return; }
+      liveCount++;
+      var stat = document.getElementById("preview-stat");
+      if (stat) stat.textContent = "frame " + liveCount + "  " + new Date().toLocaleTimeString();
+      if (!liveTimer) return;
+      var sel = document.getElementById("fps-select");
+      var ms  = sel ? parseInt(sel.value, 10) : 1000;
+      if (!ms || ms < 100) ms = 1000;
+      liveTimer = setTimeout(doLiveFrame, ms);
+    });
+  }
+
+  window.toggleLive = function () {
+    if (liveTimer) { stopLive(); return; }
+    var b = document.getElementById("btn-live");
+    if (b) b.innerHTML = "&#9646;&#9646; Stop";
+    liveCount = 0;
+    liveTimer = setTimeout(doLiveFrame, 0);
+  };
+
+  (function buildCurl() {
+    var h = location.hostname || "192.168.1.147";
+    document.getElementById("curl-pre").textContent = [
+      "# Control panel:  open http://" + h + ":8099/",
+      "",
+      "# Framebuffer (BGRX 1280x720):",
+      "curl http://" + h + ":8099/api/framebuffer -o frame.raw",
+      "# Headers: X-FB-Width  X-FB-Height  X-FB-Stride  X-FB-Format",
+      "",
+      "# Display URL on HDMI:",
+      "curl -X POST http://" + h + ":8099/api/url \\",
+      "     -H \"Content-Type: application/json\" \\",
+      "     -d '{\"url\":\"http://" + h + ":8099/\"}'",
+      "",
+      "# Wake HDMI:     curl -X POST http://" + h + ":8099/api/display/wake",
+      "# Stop browser:  curl -X POST http://" + h + ":8099/api/browser/stop",
+    ].join("\n");
+  }());
+
+  refreshStatus();
+  setInterval(refreshStatus, 20000);
+
+}());
 </script>
 </body>
 </html>

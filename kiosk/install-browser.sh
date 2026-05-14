@@ -224,6 +224,7 @@ window_screen_height:720
 fb_toolbar_size:1
 fb_furniture_size:1
 fb_toolbar_layout:
+enable_javascript:1
 EOCHOICES
 log "  Choices written: window 1280x720, toolbar hidden"
 
@@ -260,6 +261,12 @@ LD_LIBRARY_PATH=$BROWSER_DIR/lib:$BROWSER_DIR/usr/lib:/usr/lib:/lib \
   /mnt/internal/browser/usr/bin/netsurf-fb 2>&1 | grep "not found" \
   && log "WARNING: some libs still missing (see above)" \
   || log "All libraries resolved successfully!"
+
+# ── Register kiosk API in startup sequence ────────────────────────────────────
+log "Registering c4kiosk in /etc/rc.d/..."
+ln -sf /etc/init.d/c4kiosk /etc/rc.d/95c4kiosk
+chmod +x /etc/init.d/c4kiosk
+log "Registered: /etc/rc.d/95c4kiosk -> /etc/init.d/c4kiosk"
 
 log "Browser installation complete."
 log "  Binary:    $BROWSER_DIR/usr/bin/netsurf-fb"

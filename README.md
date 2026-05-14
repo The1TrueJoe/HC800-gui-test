@@ -159,6 +159,7 @@ All endpoints are on port **8099**. CORS is open (`*`).
 | `GET`  | `/api/status` | Full system status (browser, fb0, config, uptime) |
 | `POST` | `/api/url` | `{ "url": "http://..." }` — launch browser and display URL |
 | `POST` | `/api/browser/stop` | Kill the browser process |
+| `POST` | `/api/display/wake` | Re-assert 1280×720 mode, unblank fb0, and enable the HDMI transmitter signal |
 | `GET`  | `/api/capture.raw` | Raw 1280×720 BGRX framebuffer dump (3,686,400 bytes) |
 | `POST` | `/api/test` | Write color test pattern to fb0 |
 | `POST` | `/api/black` | Write all-black frame to fb0 |
@@ -273,6 +274,7 @@ Requires Docker with `--platform linux/386` support (works on Apple Silicon and 
 |---|---|
 | **HTTPS** | NetSurf 3.2 + old libssl on the HC800 cannot connect to modern HTTPS servers. Use HTTP, or run a local proxy. |
 | **JavaScript** | SpiderMonkey 1.8.5. React/Vue/etc won't work. Simple vanilla JS and jQuery work fine. |
+| **HDMI no signal** | The framebuffer can contain valid pixels while the ADV7511/ADV7513 transmitter has TMDS output disabled. The API now re-enables the transmitter on startup, browser launch, and frame writes; manually call `POST /api/display/wake` if a display is connected after boot. |
 | **Mouse cursor** | Always visible at center of screen. Can be moved off-screen via `/dev/input` events if needed. |
 | **No font embedding** | DejaVu only. Web fonts won't load over HTTPS. |
 | **Single page** | Only one URL/page can be displayed at a time. |
